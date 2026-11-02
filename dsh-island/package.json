@@ -1,0 +1,34 @@
+{
+  "name": "dsh-island",
+  "version": "0.2.0",
+  "description": "桌面级灵动岛：在操作系统桌面上常驻一块置顶浮窗，实时显示 DSH 当前会话的工作状态（相位、标题、目录、工具、步数、token、耗时），可拖拽摆放。",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "dynamic-island",
+    "status",
+    "overlay",
+    "desktop"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

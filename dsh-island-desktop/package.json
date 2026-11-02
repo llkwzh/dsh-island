@@ -1,0 +1,7 @@
+{
+  "name": "dsh-island-window",
+  "productName": "DSH Island",
+  "version": "0.1.0",
+  "main": "main.js",
+  "private": true
+}

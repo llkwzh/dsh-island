@@ -1,0 +1,449 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src http://127.0.0.1:*" />
+    <title>DSH Island</title>
+    <style>
+      :root {
+        --ink: #eef1f6;
+        --ink-dim: #9aa4b6;
+        --ink-soft: #6e7889;
+        --accent: #7c8cff;
+        --card-top: #262a37;
+        --card-bot: #14161d;
+        --hair: rgba(255, 255, 255, 0.085);
+        --shine: rgba(255, 255, 255, 0.07);
+        --shadow:
+          0 14px 32px rgba(0, 0, 0, 0.46),
+          0 3px 8px rgba(0, 0, 0, 0.34),
+          0 1px 0 rgba(0, 0, 0, 0.5);
+      }
+
+      body[data-theme='light'] {
+        --ink: #101725;
+        --ink-dim: #46536a;
+        --ink-soft: #737e91;
+        --card-top: #ffffff;
+        --card-bot: #eceff6;
+        --hair: rgba(16, 22, 34, 0.1);
+        --shine: rgba(255, 255, 255, 0.9);
+        --shadow: 0 10px 24px rgba(16, 22, 34, 0.16), 0 2px 6px rgba(16, 22, 34, 0.1);
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+      }
+
+      body {
+        font: 500 12px/1.35 "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+        color: var(--ink);
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: none;
+        cursor: default;
+      }
+
+      /* An off-screen copy of the row, used only to measure how wide the text wants
+         to be — the real card is always clamped to the window. */
+      .ruler {
+        position: absolute;
+        top: 0;
+        left: 0;
+        display: block;
+        width: max-content;
+        max-width: none;
+        height: 0;
+        padding: 0;
+        margin: 0;
+        overflow: visible;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      /* 6px of breathing room so the pill radius and its shadow are never clipped. */
+      .frame { position: absolute; inset: 6px; display: flex; align-items: center; }
+
+      .card {
+        position: relative;
+        width: 100%;
+        height: 40px;
+        padding: 0 14px 0 12px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        overflow: hidden;
+        isolation: isolate;
+        background: linear-gradient(180deg, var(--card-top), var(--card-bot));
+        box-shadow:
+          inset 0 0 0 1px var(--hair),
+          inset 0 1px 0 var(--shine),
+          var(--shadow);
+        transition: box-shadow 0.2s ease;
+      }
+
+      /* One soft bloom behind the orb — the only place the tone shows up as colour. */
+      .card::before {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: 50%;
+        width: 96px;
+        height: 96px;
+        transform: translateY(-50%);
+        background: radial-gradient(circle, var(--accent-glow), transparent 68%);
+        opacity: 0.5;
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      .card:hover {
+        box-shadow:
+          inset 0 0 0 1px var(--hair),
+          inset 0 1px 0 var(--shine),
+          0 12px 30px rgba(0, 0, 0, 0.5);
+      }
+
+      .orb { position: relative; width: 13px; height: 13px; flex: 0 0 auto; display: grid; place-items: center; }
+      .orb i {
+        display: block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent-glow);
+      }
+      .orb::after {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        border-radius: 50%;
+        border: 1.5px solid transparent;
+        opacity: 0;
+      }
+      body[data-tone='working'] .orb::after {
+        opacity: 1;
+        border-top-color: var(--accent);
+        border-right-color: var(--accent-glow);
+        animation: spin 1.15s linear infinite;
+      }
+      body[data-tone='waiting'] .orb i { animation: beat 1.1s ease-in-out infinite; }
+      body[data-tone='done'] .orb i { animation: pop 0.5s ease-out; }
+
+      .label {
+        flex: 0 0 auto;
+        font-size: 12.5px;
+        font-weight: 640;
+        letter-spacing: 0.3px;
+        color: var(--ink);
+      }
+
+      .activity {
+        flex: 0 0 auto;
+        font-size: 12px;
+        color: var(--ink-dim);
+        white-space: nowrap;
+      }
+      .activity::before {
+        content: '·';
+        margin: 0 5px 0 1px;
+        color: var(--ink-soft);
+      }
+      .activity.empty { display: none; }
+      .activity.flash { color: var(--accent); }
+
+      .title {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 12px;
+        font-weight: 450;
+        color: var(--ink-dim);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .metrics {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        font-size: 11px;
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.1px;
+        color: var(--ink-soft);
+        white-space: nowrap;
+      }
+      .metrics.empty { display: none; }
+      .metrics::before {
+        content: '';
+        width: 1px;
+        height: 11px;
+        margin-right: 7px;
+        border-radius: 1px;
+        background: var(--hair);
+      }
+
+      .elapsed {
+        flex: 0 0 auto;
+        min-width: 36px;
+        text-align: right;
+        font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        color: var(--ink-dim);
+      }
+
+      body[data-tone='working'] { --accent: #7c8cff; --accent-glow: rgba(124, 140, 255, 0.42); }
+      body[data-tone='waiting'] { --accent: #f2b13c; --accent-glow: rgba(242, 177, 60, 0.42); }
+      body[data-tone='done']    { --accent: #47c98b; --accent-glow: rgba(71, 201, 139, 0.42); }
+      body[data-tone='error']   { --accent: #f0605d; --accent-glow: rgba(240, 96, 93, 0.42); }
+      body[data-tone='idle']    { --accent: #7c8798; --accent-glow: rgba(124, 135, 152, 0.3); }
+
+      body.offline { opacity: 0.55; }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes beat {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(0.6); opacity: 0.5; }
+      }
+      @keyframes pop {
+        from { transform: scale(0.45); opacity: 0.3; }
+        to { transform: scale(1); opacity: 1; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .orb::after, .orb i { animation: none !important; }
+      }
+    </style>
+  </head>
+  <body data-tone="idle">
+    <div class="ruler" id="ruler" aria-hidden="true"></div>
+
+    <div class="frame">
+      <div class="card" id="card">
+        <span class="orb"><i></i></span>
+        <span class="label" id="label">待命</span>
+        <span class="activity empty" id="activity"></span>
+        <span class="title" id="title">等待会话</span>
+        <span class="metrics empty" id="metrics"></span>
+        <span class="elapsed" id="elapsed"></span>
+      </div>
+    </div>
+
+    <script>
+      const params = new URLSearchParams(location.search);
+      const feed = params.get('feed') || '';
+      const seedTheme = params.get('theme') || 'dark';
+
+      const LABELS = {
+        idle: '待命',
+        working: '正在工作',
+        done: '已完成',
+        error: '出错了',
+        'waiting-approval': '等你批准',
+        'waiting-question': '等你回答',
+        'waiting-plan': '等你确认计划',
+      };
+
+      const el = {
+        ruler: document.getElementById('ruler'),
+        card: document.getElementById('card'),
+        label: document.getElementById('label'),
+        activity: document.getElementById('activity'),
+        title: document.getElementById('title'),
+        metrics: document.getElementById('metrics'),
+        elapsed: document.getElementById('elapsed'),
+      };
+
+      const api = window.__island || {};
+      let failures = 0;
+      let last = null;
+      let flashUntil = 0;
+      let flashText = '';
+
+      function applyTheme(theme) {
+        document.body.dataset.theme = theme === 'light' ? 'light' : 'dark';
+      }
+
+      applyTheme(params.get('theme'));
+      if (typeof api.onTheme === 'function') api.onTheme(applyTheme);
+
+      function formatElapsed(seconds) {
+        const total = Math.max(0, Math.round(Number(seconds) || 0));
+        return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
+      }
+
+      function formatTokens(value) {
+        const tokens = Number(value) || 0;
+        if (!tokens) return '';
+        if (tokens >= 1000000) return (tokens / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (tokens >= 1000) return (tokens / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+        return String(tokens);
+      }
+
+      function toneOf(state) {
+        if (state.phase === 'done') return 'done';
+        if (state.phase === 'error') return 'error';
+        if (String(state.phase || '').startsWith('waiting')) return 'waiting';
+        if (state.phase === 'working') return 'working';
+        return 'idle';
+      }
+
+      // The window hugs the row: lay the card out at its natural width, measure that,
+      // then hand the number to the window. Measuring the real element avoids the
+      // feedback loop where a squeezed title reports itself as zero width.
+      let lastFit = 0;
+      function fit() {
+        // Clone the whole card into the off-screen ruler. A clone keeps the pseudo
+        // elements (the separator dots, the divider) that an element-by-element sum
+        // would miss, and the ruler is free to exceed the window width.
+        const ruler = el.ruler;
+        ruler.textContent = '';
+        const clone = el.card.cloneNode(true);
+        clone.removeAttribute('id');
+        clone.style.width = 'max-content';
+        clone.style.flex = '0 0 auto';
+        ruler.appendChild(clone);
+        const width = Math.ceil(ruler.getBoundingClientRect().width) + 12;
+        ruler.textContent = '';
+        if (Math.abs(width - lastFit) < 4) return;
+        if (typeof api.log === 'function') api.log('fit ' + width);
+        lastFit = width;
+        if (typeof api.fit === 'function') api.fit(width);
+      }
+
+      function render(state) {
+        const tone = toneOf(state);
+        document.body.dataset.tone = tone;
+
+        el.label.textContent = state.label || LABELS[state.phase] || state.phase || '待命';
+        el.elapsed.textContent = state.running ? formatElapsed(state.elapsed) : '';
+
+        const flashing = Date.now() < flashUntil;
+        const activity = flashing
+          ? flashText
+          : tone === 'working' || tone === 'waiting'
+            ? state.activity || ''
+            : '';
+        el.activity.textContent = activity;
+        el.activity.classList.toggle('empty', activity === '');
+        el.activity.classList.toggle('flash', flashing);
+
+        el.title.textContent = state.title || (state.sessionId ? '未命名会话' : '等待会话');
+
+        const bits = [];
+        if (state.step) bits.push('第 ' + state.step + ' 步');
+        const tokens = formatTokens(state.tokens);
+        if (tokens) bits.push(tokens);
+        el.metrics.textContent = bits.join(' · ');
+        el.metrics.classList.toggle('empty', bits.length === 0);
+
+        document.body.classList.remove('offline');
+        requestAnimationFrame(fit);
+      }
+
+      function flash(text) {
+        flashText = text;
+        flashUntil = Date.now() + 1600;
+        if (last) render(last);
+      }
+
+      async function tick() {
+        if (!feed) {
+          document.body.classList.add('offline');
+          el.label.textContent = '连接中';
+          return;
+        }
+        try {
+          const response = await fetch(feed, { cache: 'no-store' });
+          if (!response.ok) throw new Error('http ' + response.status);
+          const state = await response.json();
+          failures = 0;
+          last = state;
+          render(state);
+        } catch (error) {
+          failures += 1;
+          if (failures > 3) {
+            document.body.classList.add('offline');
+            el.label.textContent = '连接中';
+          }
+        }
+      }
+
+      // The host reports whole seconds; the clock ticks locally between polls.
+      setInterval(() => {
+        if (last && last.running && last.startedAt) {
+          const seconds = Math.max(0, Math.floor((Date.now() - last.startedAt) / 1000));
+          el.elapsed.textContent = formatElapsed(seconds);
+        }
+      }, 250);
+
+      // ------------------------------------------------------------ drag + click
+      let gesture = null;
+      let lastOpenAt = 0;
+
+      function openDsh() {
+        if (Date.now() - lastOpenAt < 600) return;
+        lastOpenAt = Date.now();
+        if (typeof api.log === 'function') api.log('open-dsh');
+        flash('正在切回 DSH…');
+        if (typeof api.openDsh !== 'function') {
+          flash('桥接不可用');
+          return;
+        }
+        Promise.resolve(api.openDsh())
+          .then((result) => flash(result && result.ok ? '已回到 DSH' : '没找到 DSH 窗口'))
+          .catch(() => flash('切换失败'));
+      }
+
+      el.card.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        gesture = { sx: event.screenX, sy: event.screenY, moved: false, at: Date.now() };
+        try { el.card.setPointerCapture(event.pointerId); } catch (error) {}
+        if (typeof api.dragStart === 'function') {
+          api.dragStart({ screenX: event.screenX, screenY: event.screenY });
+        }
+      });
+
+      el.card.addEventListener('pointermove', (event) => {
+        if (!gesture) return;
+        if (!gesture.moved) {
+          const dx = Math.abs(event.screenX - gesture.sx);
+          const dy = Math.abs(event.screenY - gesture.sy);
+          if (dx > 3 || dy > 3) gesture.moved = true;
+        }
+        if (gesture.moved && typeof api.dragMove === 'function') {
+          api.dragMove({ screenX: event.screenX, screenY: event.screenY });
+        }
+      });
+
+      function endGesture(event) {
+        if (!gesture) return;
+        const wasDrag = gesture.moved;
+        const quick = Date.now() - gesture.at < 500;
+        gesture = null;
+        if (typeof api.dragEnd === 'function') api.dragEnd();
+        try { el.card.releasePointerCapture(event.pointerId); } catch (error) {}
+        if (wasDrag || !quick) return;
+        openDsh();
+      }
+
+      el.card.addEventListener('pointerup', endGesture);
+      el.card.addEventListener('pointercancel', endGesture);
+      el.card.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        openDsh();
+      });
+
+      tick();
+      setInterval(tick, 400);
+    </script>
+  </body>
+</html>

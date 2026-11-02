@@ -1,0 +1,15 @@
+# scratch / local state
+.shots/
+node_modules/
+*.log
+ghuser.json
+repos.json
+
+# OS noise
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# editor
+.vscode/
+.idea/
